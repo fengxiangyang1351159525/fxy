@@ -15,7 +15,7 @@ const STATUS_STYLE = {
   ended: 'bg-[var(--line)] text-[var(--ink-soft)]',
 };
 
-const METHOD_LABEL = { kiosk: '签到台', manual: '手动登记' };
+const METHOD_LABEL = { kiosk: '签到台', manual: '手动登记', self: '自助' };
 
 const TABS = [
   { key: 'all', label: '全部' },

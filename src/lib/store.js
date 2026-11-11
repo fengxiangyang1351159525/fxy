@@ -86,6 +86,44 @@ export const useStore = create(
         return t.id;
       },
 
+      /**
+       * 使用者以个人账号加入活动并自动登记为参会人（自助签到）。
+       * reason: ACTIVITY_MISSING / ACTIVITY_ENDED / ALREADY_JOINED
+       * 同名且无账号关联的既有名单记录会被合并（打上 accountId，避免重复计数）
+       */
+      joinActivityAsAccount(activityId, { name, tag = '', accountId }) {
+        const trimmed = (name || '').trim();
+        if (!trimmed || !accountId) return { ok: false, reason: 'INVALID' };
+        const act = get().activities.find((a) => a.id === activityId);
+        if (!act) return { ok: false, reason: 'ACTIVITY_MISSING' };
+        if (Date.now() > act.endAt) return { ok: false, reason: 'ACTIVITY_ENDED' };
+        if (get().attendees.some((t) => t.activityId === activityId && t.accountId === accountId)) {
+          return { ok: false, reason: 'ALREADY_JOINED' };
+        }
+        const twin = get().attendees.find(
+          (t) => t.activityId === activityId && !t.accountId && t.name === trimmed
+        );
+        if (twin) {
+          set((s) => ({
+            attendees: s.attendees.map((t) => (t.id === twin.id ? { ...t, accountId } : t)),
+          }));
+          return { ok: true, attendeeId: twin.id, merged: true };
+        }
+        const t = {
+          id: uid(),
+          activityId,
+          name: trimmed,
+          tag,
+          accountId,
+          status: 'pending',
+          checkinAt: null,
+          checkoutAt: null,
+          method: null,
+        };
+        set((s) => ({ attendees: [...s.attendees, t] }));
+        return { ok: true, attendeeId: t.id, merged: false };
+      },
+
       removeAttendee(id) {
         set((s) => ({ attendees: s.attendees.filter((t) => t.id !== id) }));
       },
