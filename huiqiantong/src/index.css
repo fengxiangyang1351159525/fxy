@@ -1,0 +1,71 @@
+@import "tailwindcss";
+
+@import url('https://fonts.googleapis.cn/css2?family=Noto+Serif+SC:wght@600;700;900&family=Noto+Sans+SC:wght@400;500;700&family=IBM+Plex+Mono:wght@500;600;700&display=swap');
+
+:root {
+  --ink: #12294b;        /* 主色·深藏青 */
+  --ink-deep: #0b1c36;   /* 更深的墨蓝 */
+  --ink-soft: #35507a;   /* 弱化蓝 */
+  --paper: #eef2f7;      /* 页面底·浅蓝灰 */
+  --card: #ffffff;
+  --line: #dbe3ec;
+  --seal: #b8442c;       /* 点缀·印章朱红 */
+  --seal-soft: #fdf0ec;
+  --ok: #1e7f4f;         /* 签到绿 */
+  --ok-soft: #e8f5ee;
+  --warn: #8a6d1f;       /* 待签到琥珀 */
+  --warn-soft: #faf3e0;
+}
+
+html, body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: 'Noto Sans SC', sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* 纸面网格纹理，营造档案文件的质感 */
+.paper-grain {
+  background-image:
+    linear-gradient(var(--line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--line) 1px, transparent 1px);
+  background-size: 36px 36px;
+  opacity: 0.35;
+}
+
+.font-display { font-family: 'Noto Serif SC', serif; }
+.font-mono-num { font-family: 'IBM Plex Mono', monospace; font-variant-numeric: tabular-nums; }
+
+/* 盖章动画：签到成功的标志性瞬间 */
+@keyframes stamp-in {
+  0%   { transform: scale(2.2) rotate(-32deg); opacity: 0; }
+  55%  { transform: scale(0.92) rotate(-7deg); opacity: 1; }
+  75%  { transform: scale(1.04) rotate(-9deg); }
+  100% { transform: scale(1) rotate(-8deg); opacity: 1; }
+}
+.animate-stamp { animation: stamp-in 0.55s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+@keyframes fade-up {
+  from { transform: translateY(10px); opacity: 0; }
+  to   { transform: translateY(0); opacity: 1; }
+}
+.animate-fade-up { animation: fade-up 0.45s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+@keyframes ring-pulse {
+  0%   { box-shadow: 0 0 0 0 rgba(184, 68, 44, 0.35); }
+  100% { box-shadow: 0 0 0 16px rgba(184, 68, 44, 0); }
+}
+.animate-ring { animation: ring-pulse 0.9s ease-out both; }
+
+/* 数字输入去掉默认样式 */
+input[type='number']::-webkit-outer-spin-button,
+input[type='number']::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* 滚动条 */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-thumb { background: #c3cfdd; border-radius: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+
