@@ -1,17 +1,37 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'wouter';
+import { Link, useLocation } from 'wouter';
 import { toast } from 'sonner';
 import {
   LogIn, LogOut, Delete, CornerDownLeft, UserPlus, ArrowLeft,
-  Clock3, MapPin, BadgeCheck, UserX,
+  Clock3, MapPin, BadgeCheck, UserX, ScanLine,
 } from 'lucide-react';
+import QrScanner from '../components/QrScanner';
 import { useStore } from '../lib/store';
 import { cn, fmtDateTime, fmtClock } from '../lib/utils';
+import { parseCodeText } from '../lib/qrcode';
 
 /* ---------------- 阶段一：输入签到码 ---------------- */
 
 function CodeScreen() {
+  const [loc] = useLocation();
+  const autoRef = useRef(false);
   const [code, setCode] = useState('');
+
+  // 活动二维码直达：/kiosk?code=123456 自动进入该活动
+  useEffect(() => {
+    if (autoRef.current) return;
+    autoRef.current = true;
+    const qs = loc.split('?')[1] || '';
+    const fromUrl = new URLSearchParams(qs).get('code');
+    if (!fromUrl || !/^[0-9]{6}$/.test(fromUrl)) return;
+    const found = useStore.getState().activities.find((a) => a.code === fromUrl);
+    if (found) {
+      toast.success('已扫码进入「' + found.name + '」签到台');
+      useStore.setState({ kioskActivityId: found.id });
+    } else {
+      toast.error('链接中的签到码无效，或本设备没有该活动数据');
+    }
+  }, [loc]);
 
   useEffect(() => {
     const onKey = (e) => {
@@ -110,7 +130,8 @@ function PanelScreen({ activityId, onSwitch }) {
 
   const [query, setQuery] = useState('');
   const [selectedId, setSelectedId] = useState(null);
-  const [flash, setFlash] = useState(null); // {type:'in'|'out', name, time}
+  const [scanning, setScanning] = useState(false);
+  const [flash, setFlash] = useState(null); // {type:'in'|'out', name, time, viaQr}
   const inputRef = useRef(null);
   const [now, setNow] = useState(Date.now());
 
@@ -180,6 +201,57 @@ function PanelScreen({ activityId, onSwitch }) {
     setFlash({ type: 'in', name: query.trim(), time: Date.now(), registered: true });
   };
 
+  /** 扫码回调：个人码直接登记；活动码负责切换签到台 */
+  const handleScanText = (text) => {
+    const parsed = parseCodeText(text);
+    if (!parsed) {
+      toast.warning('未识别为会签通二维码，请对准码后重试');
+      setScanning(false);
+      return;
+    }
+    if (parsed.kind === 'activity') {
+      setScanning(false);
+      const found = useStore.getState().activities.find((a) => a.code === parsed.code);
+      if (found && found.id === activityId) {
+        toast.info('当前签到台就是「' + found.name + '」，请参出个人码即可');
+        return;
+      }
+      if (found) {
+        useStore.setState({ kioskActivityId: found.id });
+        toast.success('已切换到活动「' + found.name + '」签到台');
+      } else {
+        toast.error('该活动签到码无效，或本设备没有该活动数据');
+      }
+      return;
+    }
+    // 个人码：识别参会人记录
+    const t = useStore.getState().attendees.find((x) => x.id === parsed.attendeeId);
+    setScanning(false);
+    if (!t) {
+      toast.error('未找到该参会记录：此码来自其它设备的数据，或相关活动已删除');
+      return;
+    }
+    if (t.activityId !== activityId) {
+      const act = useStore.getState().activities.find((a) => a.id === t.activityId);
+      if (act) {
+        useStore.setState({ kioskActivityId: act.id });
+        toast.warning('该码属于活动「' + act.name + '」，签到台已切换');
+      } else {
+        toast.error('此码所属活动在本设备不存在');
+      }
+      return;
+    }
+    if (t.status === 'pending') {
+      checkIn(t.id, 'qrcode');
+      setFlash({ type: 'in', name: t.name, time: Date.now(), viaQr: true });
+    } else if (t.status === 'in') {
+      checkOut(t.id, 'qrcode');
+      setFlash({ type: 'out', name: t.name, time: Date.now(), viaQr: true });
+    } else {
+      toast.warning(t.name + ' 已完成本次出席，如需重置请在活动详情页操作');
+    }
+  };
+
   return (
     <div className="relative mx-auto grid w-full max-w-3xl gap-5">
       {/* 顶部活动信息条 */}
@@ -203,8 +275,16 @@ function PanelScreen({ activityId, onSwitch }) {
       <div className="rounded-3xl bg-[var(--card)] p-6 shadow-2xl">
         {!selected && !flash && (
           <div>
-            <label className="text-sm font-bold text-[var(--ink)]">请输入参会人姓名</label>
-            <p className="mt-1 text-xs text-[var(--ink-soft)]">到场选人签到，离场再次选人签退；名字未在名单中？可直接现场登记。</p>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <label className="text-sm font-bold text-[var(--ink)]">请输入参会人姓名</label>
+              <button
+                onClick={() => setScanning(true)}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--ink)] px-3.5 py-2 text-xs font-bold text-white transition-all hover:-translate-y-0.5 hover:shadow-md"
+              >
+                <ScanLine className="h-4 w-4" /> 扫码签到
+              </button>
+            </div>
+            <p className="mt-1 text-xs text-[var(--ink-soft)]">到场选人签到，离场再次选人签退；也支持扫描参会人个人二维码；名单中没有的人可现场登记。</p>
             <div className="relative mt-4">
               <input
                 ref={inputRef}
@@ -316,6 +396,14 @@ function PanelScreen({ activityId, onSwitch }) {
 
       <p className="text-center text-xs text-white/40">本页为现场签到台，操作将实时同步到活动统计</p>
 
+      {/* 摄像头扫码浮层 */}
+      {scanning && (
+        <QrScanner
+          onText={handleScanText}
+          onClose={() => setScanning(false)}
+        />
+      )}
+
       {/* 盖章成功弹层 */}
       {flash && (
         <div className="fixed inset-0 z-30 flex items-center justify-center bg-[var(--ink-deep)]/80 backdrop-blur-sm">
@@ -331,7 +419,10 @@ function PanelScreen({ activityId, onSwitch }) {
               {flash.type === 'in' ? '签到成功' : '签退成功'}
             </p>
             <p className="mt-1 text-sm text-[var(--ink-soft)]">{flash.name} · {fmtClock(flash.time)}</p>
-            <p className="mt-4 font-mono-num text-[11px] tracking-[0.2em] text-[var(--ink-soft)]/60">HUIQIANTONG · {flash.type === 'in' ? 'CHECK-IN' : 'CHECK-OUT'} · {fmtClock(flash.time)}</p>
+            <p className="mt-3 text-[11px] font-bold tracking-widest text-[var(--ok)]">
+              {flash.viaQr ? '扫码识别 · 自动登记' : '现场登记'}
+            </p>
+            <p className="mt-3 font-mono-num text-[11px] tracking-[0.2em] text-[var(--ink-soft)]/60">HUIQIANTONG · {flash.type === 'in' ? 'CHECK-IN' : 'CHECK-OUT'} · {fmtClock(flash.time)}</p>
           </div>
         </div>
       )}

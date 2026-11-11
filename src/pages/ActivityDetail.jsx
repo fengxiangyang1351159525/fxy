@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Link, useParams, useLocation } from 'wouter';
 import { toast } from 'sonner';
+import { QRCodeCanvas } from 'qrcode.react';
 import {
   ArrowLeft, MapPin, Clock3, QrCode, Laptop, Search, Plus, X,
   LogIn, LogOut, RotateCcw, Trash2, Users, UserCheck, UserX, Rss, Hand,
@@ -8,6 +9,7 @@ import {
 import Layout from '../components/Layout';
 import { useStore } from '../lib/store';
 import { cn, fmtDateTime, fmtClock, fmtDuration, activityStatus, activityStats, STATUS_LABEL } from '../lib/utils';
+import { buildActivityCodeUrl } from '../lib/qrcode';
 
 const STATUS_STYLE = {
   upcoming: 'bg-[var(--warn-soft)] text-[var(--warn)]',
@@ -15,7 +17,7 @@ const STATUS_STYLE = {
   ended: 'bg-[var(--line)] text-[var(--ink-soft)]',
 };
 
-const METHOD_LABEL = { kiosk: '签到台', manual: '手动登记', self: '自助' };
+const METHOD_LABEL = { kiosk: '签到台', manual: '手动登记', self: '自助', qrcode: '扫码' };
 
 const TABS = [
   { key: 'all', label: '全部' },
@@ -71,6 +73,7 @@ export default function ActivityDetail({ activityId }) {
   const [newName, setNewName] = useState('');
   const [newTag, setNewTag] = useState('');
   const [confirmDel, setConfirmDel] = useState(false);
+  const [showActQr, setShowActQr] = useState(false);
 
   const filtered = useMemo(() => {
     let list = attendees;
@@ -152,6 +155,21 @@ export default function ActivityDetail({ activityId }) {
           </div>
 
           <div className="flex items-center gap-4">
+            <button
+              onClick={() => setShowActQr(true)}
+              title="点击查看活动签到二维码"
+              className="rounded-xl border border-white/25 p-2 transition-all hover:-translate-y-0.5 hover:border-white/60"
+            >
+              <QRCodeCanvas
+                value={buildActivityCodeUrl(activity.code)}
+                size={52}
+                level="M"
+                marginSize={0}
+                fgColor="#ffffff"
+                bgColor="transparent"
+                title="活动签到二维码"
+              />
+            </button>
             <div className="text-right">
               <div className="inline-flex items-center gap-1.5 text-xs text-white/60"><QrCode className="h-3.5 w-3.5" />现场签到码</div>
               <div className="font-mono-num mt-1 text-4xl font-bold tracking-[0.18em] text-white">{activity.code}</div>
@@ -354,6 +372,43 @@ export default function ActivityDetail({ activityId }) {
           </div>
         </div>
       </section>
+
+      {/* 活动签到二维码弹窗 */}
+      {showActQr && (
+        <div
+          className="animate-fade-up fixed inset-0 z-40 flex items-center justify-center bg-[var(--ink-deep)]/85 px-5 backdrop-blur-sm"
+          onClick={() => setShowActQr(false)}
+        >
+          <div
+            className="relative w-full max-w-md rounded-3xl bg-[var(--card)] p-7 text-center shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={() => setShowActQr(false)}
+              title="关闭"
+              className="absolute right-3 top-3 rounded-lg p-2 text-[var(--ink-soft)] transition-colors hover:bg-[var(--paper)] hover:text-[var(--ink)]"
+            >
+              <X className="h-5 w-5" />
+            </button>
+            <p className="text-xs tracking-[0.3em] text-[var(--ink-soft)]">CHECK · IN · QR</p>
+            <h3 className="mt-2 font-display text-xl font-black text-[var(--ink)]">「{activity.name}」签到二维码</h3>
+            <div className="mx-auto mt-4 w-fit rounded-2xl bg-white p-3 shadow-[0_2px_10px_rgba(18,41,75,0.12)]">
+              <QRCodeCanvas
+                value={buildActivityCodeUrl(activity.code)}
+                size={220}
+                level="M"
+                marginSize={2}
+                fgColor="#12294b"
+                title="活动签到二维码"
+              />
+            </div>
+            <p className="font-mono-num mt-3 text-2xl font-bold tracking-[0.3em] text-[var(--ink)]">{activity.code}</p>
+            <p className="mt-2 text-xs leading-relaxed text-[var(--ink-soft)]">
+              投屏展示或打印张贴：扫码直达本活动签到台并自动带码；演示设备（同一浏览器数据域）内有效
+            </p>
+          </div>
+        </div>
+      )}
     </Layout>
   );
 }

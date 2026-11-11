@@ -1,14 +1,16 @@
 import React, { useMemo, useState } from 'react';
 import { toast } from 'sonner';
+import { QRCodeCanvas } from 'qrcode.react';
 import {
-  UserRound, QrCode, LogIn, LogOut, BadgeCheck, Clock3, MapPin, Hand, CircleDot,
+  UserRound, QrCode, LogIn, LogOut, BadgeCheck, Clock3, MapPin, Hand, CircleDot, X, ScanLine,
 } from 'lucide-react';
 import Layout from '../components/Layout';
 import { useStore } from '../lib/store';
 import { useAuth } from '../lib/auth';
 import { cn, fmtDateTime, fmtClock, activityStatus, STATUS_LABEL } from '../lib/utils';
+import { buildAttendeeCodeUrl } from '../lib/qrcode';
 
-const METHOD_LABEL = { kiosk: '签到台', manual: '手动登记', self: '自助' };
+const METHOD_LABEL = { kiosk: '签到台', manual: '手动登记', self: '自助', qrcode: '扫码' };
 
 export default function MyAttendance() {
   const session = useAuth((s) => s.session);
@@ -20,6 +22,9 @@ export default function MyAttendance() {
   const findActivityByCode = useStore((s) => s.findActivityByCode);
 
   const [code, setCode] = useState('');
+  const [qrFor, setQrFor] = useState(null); // 出示个人码的场次 { attendee, activity }
+
+  const personUrl = (x) => buildAttendeeCodeUrl(x.activity.id, x.attendee.id);
 
   // 我的出勤记录（含自助加入与设计者代登记关联的记录）
   const mine = useMemo(() => {
@@ -145,16 +150,54 @@ export default function MyAttendance() {
         ) : (
           <div className="mt-5 grid gap-4 lg:grid-cols-2">
             {mine.map((x, i) => (
-              <MyCard key={x.attendee.id} x={x} index={i} onSelf={doSelfCheck} />
+              <MyCard key={x.attendee.id} x={x} index={i} onSelf={doSelfCheck} onQr={setQrFor} />
             ))}
           </div>
         )}
       </section>
+
+      {/* 个人参会码弹窗 */}
+      {qrFor && (
+        <div
+          className="animate-fade-up fixed inset-0 z-40 flex items-center justify-center bg-[var(--ink-deep)]/85 px-5 backdrop-blur-sm"
+          onClick={() => setQrFor(null)}
+        >
+          <div
+            className="relative w-full max-w-sm rounded-3xl bg-[var(--card)] p-6 text-center shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={() => setQrFor(null)}
+              title="关闭"
+              className="absolute right-3 top-3 rounded-lg p-2 text-[var(--ink-soft)] transition-colors hover:bg-[var(--paper)] hover:text-[var(--ink)]"
+            >
+              <X className="h-5 w-5" />
+            </button>
+            <p className="text-xs tracking-[0.3em] text-[var(--ink-soft)]">PERSONAL · CHECK · IN · CODE</p>
+            <h3 className="mt-2 font-display text-xl font-black text-[var(--ink)]">{qrFor.attendee.name} 的个人参会码</h3>
+            <p className="mt-1 text-xs text-[var(--ink-soft)]">{qrFor.activity.name}</p>
+            <div className="mx-auto mt-4 w-fit rounded-2xl bg-white p-3 shadow-[0_2px_10px_rgba(18,41,75,0.12)]">
+              <QRCodeCanvas
+                value={personUrl(qrFor)}
+                size={220}
+                level="M"
+                marginSize={2}
+                fgColor="#12294b"
+                title="个人参会码"
+              />
+            </div>
+            <p className="mt-4 inline-flex items-center gap-1.5 text-xs leading-relaxed text-[var(--ink-soft)]">
+              <ScanLine className="h-3.5 w-3.5 shrink-0 text-[var(--seal)]" />
+              到现场签到台出示此码即可自动签到/签退；该码记录保存在本设备浏览器中
+            </p>
+          </div>
+        </div>
+      )}
     </Layout>
   );
 }
 
-function MyCard({ x, index, onSelf }) {
+function MyCard({ x, index, onSelf, onQr }) {
   const { attendee: t, activity } = x;
   const st = activityStatus(activity);
   const isUpcoming = st === 'upcoming';
@@ -202,6 +245,13 @@ function MyCard({ x, index, onSelf }) {
           >
             {t.status === 'pending' ? '未签到' : t.status === 'in' ? (fmtClock(t.checkinAt) + ' 入场') : (fmtClock(t.checkinAt) + ' 入 · ' + fmtClock(t.checkoutAt) + ' 出')}
           </span>
+          <button
+            onClick={() => onQr(x)}
+            className="inline-flex items-center gap-1 font-bold text-[var(--seal)] underline-offset-2 hover:underline"
+            title="出示个人参会二维码，到签到台扫码登记"
+          >
+            <QrCode className="h-3 w-3" /> 出示二维码
+          </button>
         </div>
 
         <div className="mt-4">
